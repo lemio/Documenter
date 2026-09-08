@@ -1,0 +1,488 @@
+/*
+ * MicroPython Visual — a freeform board of "value blocks", each bound to a pin
+ * on an ESP32 running MicroPython. Visual language taken from the Figma
+ * reference in FigmaExport/ (white rounded pills, gray text, blue sparkline
+ * dot, translucent title marker on a black canvas).
+ */
+
+@font-face {
+  font-family: "Roboto Flex";
+  src: url("fonts/Roboto-VariableFont_wdth,wght.ttf") format("truetype");
+  font-weight: 100 900;
+  font-display: swap;
+}
+
+:root {
+  --pill: #ffffff;
+  --pill-border: rgba(0, 0, 0, 0.12);
+  --ink: #999999;          /* label + value text, matches the Figma */
+  --ink-strong: #6d6d6d;
+  --accent: #2283f6;       /* sparkline dot */
+  --bg: #000000;
+  --font: "Roboto Flex", "Roboto", -apple-system, system-ui, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  height: 100%;
+  position: fixed;
+  overflow: hidden;
+  overscroll-behavior: none;
+  background: var(--bg);
+  font-family: var(--font);
+}
+body.webcam {
+  background: transparent; /* let the #webcam video (z-index:-1) show through */
+}
+
+#canvas {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  touch-action: none;
+}
+
+/* ---- editable title with a marker that hugs the text ---- */
+#titlebox {
+  position: absolute;
+  top: 18px;
+  left: 18px;
+  right: 74px;
+  z-index: 3;
+  line-height: 1.5;
+}
+#title {
+  font-size: 24px;
+  font-weight: 600;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.16);
+  padding: 1px 9px;
+  border-radius: 3px;
+  -webkit-box-decoration-break: clone;
+  box-decoration-break: clone;
+  outline: none;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  cursor: text;
+  -webkit-user-select: text;
+  user-select: text;
+}
+body.webcam #title {
+  background: rgba(0, 0, 0, 0.5);
+}
+
+/* ---- webcam background ---- */
+#webcam {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  /* rotate a landscape camera to fill the portrait canvas */
+  width: 100vh;
+  height: 100vw;
+  object-fit: cover;
+  transform: translate(-50%, -50%) rotate(90deg);
+  z-index: -1;
+  background: #000;
+}
+
+/* ---- blocks ---- */
+#blocks {
+  position: absolute;
+  inset: 0;
+}
+
+.block-wrap {
+  position: absolute;
+  padding: 15px;              /* the hover "margin" around a block */
+  touch-action: none;
+}
+.block-wrap.dragging {
+  z-index: 50;
+}
+.block-wrap.dragging .block {
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+
+.block {
+  position: relative;
+  min-width: 176px;
+  max-width: 300px;
+  min-height: 56px;
+  padding: 8px 16px 9px;
+  background: var(--pill);
+  border: 1px solid var(--pill-border);
+  border-radius: 22px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.28);
+  cursor: grab;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: auto auto;
+  column-gap: 10px;
+  row-gap: 1px;
+  align-items: center;
+}
+.block-wrap.dragging .block {
+  cursor: grabbing;
+}
+
+.block-label {
+  grid-column: 1;
+  grid-row: 1;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ink);
+  outline: none;
+  min-width: 8px;
+  -webkit-user-select: text;
+  user-select: text;
+  cursor: text;
+}
+
+/* the "mandatory _" placeholder only shows while the block is hovered */
+.block-label:empty::before,
+.block-icon:empty::before {
+  content: "";
+}
+.block-wrap:hover .block-label:empty::before,
+.block-wrap:hover .block-icon:empty::before,
+#titlebox:hover #title:empty::before {
+  content: "_";
+  opacity: 0.4;
+}
+
+.block-pin {
+  grid-column: 2;
+  grid-row: 1;
+  justify-self: end;
+  align-self: start;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--ink);
+  background: #f1f1f1;
+  border: none;
+  border-radius: 999px;
+  padding: 2px 8px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.block-pin b {
+  color: var(--ink-strong);
+  font-weight: 600;
+  margin-left: 3px;
+}
+.block-pin.unset {
+  color: #bdbdbd;
+}
+
+.block-main {
+  grid-column: 1 / -1;
+  grid-row: 2;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+}
+
+.block-value {
+  font-size: 27px;
+  font-weight: 500;
+  color: var(--ink);
+  cursor: pointer;
+  white-space: nowrap;
+  letter-spacing: 0.01em;
+}
+.block-value.dim {
+  color: #cfcfcf;
+}
+.block-value .unit {
+  font-size: 16px;
+  margin-left: 2px;
+}
+
+.block-icon {
+  font-size: 22px;
+  line-height: 1;
+  outline: none;
+  min-width: 10px;
+  margin-left: auto;          /* push it to the far right of the block */
+  text-align: right;
+  cursor: text;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* sparkline / PWM duty editor: a compact strip to the LEFT of the value */
+.block-spark {
+  flex: 0 0 auto;
+  width: 52px;
+  height: 24px;
+  overflow: visible;
+  display: block;
+}
+.block-pwm {
+  flex: 0 0 auto;
+  width: 58px;
+  height: 18px;
+  margin: 0;
+  padding: 0;
+  cursor: pointer;
+  accent-color: var(--accent);
+}
+.block-spark path {
+  fill: none;
+  stroke: var(--ink);
+  stroke-width: 1;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+.block-spark circle {
+  fill: var(--accent);
+}
+
+/* close cross — visible on hover of the padded wrap, or when pinned by long-press */
+.block-close {
+  position: absolute;
+  top: -9px;
+  right: -9px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid #fff;
+  background: #141414;
+  color: #fff;
+  font-size: 13px;
+  line-height: 1;
+  padding: 0;
+  cursor: pointer;
+  opacity: 0;
+  transform: scale(0.6);
+  transition: opacity 0.12s ease, transform 0.12s ease;
+  z-index: 2;
+}
+.block-wrap:hover .block-close,
+.block-wrap.armed .block-close {
+  opacity: 1;
+  transform: scale(1);
+}
+
+/* ---- top-right tools ---- */
+#tools {
+  position: fixed;
+  top: 14px;
+  right: 14px;
+  z-index: 6;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+}
+#add {
+  width: 46px;
+  height: 46px;
+  border-radius: 50%;
+  border: none;
+  background: #fff;
+  color: #222;
+  font-size: 30px;
+  font-weight: 300;
+  line-height: 44px;
+  cursor: pointer;
+  box-shadow: 0 3px 14px rgba(0, 0, 0, 0.45);
+}
+#add:active {
+  transform: scale(0.94);
+}
+#device {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border: none;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.14);
+  color: #eee;
+  font: 500 12px/1 var(--font);
+  padding: 7px 11px 7px 9px;
+  cursor: pointer;
+  backdrop-filter: blur(4px);
+}
+#device .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #8a8a8a;
+}
+#device.is-connecting .dot,
+#device.is-flashing .dot {
+  background: #f0a020;
+  animation: pulse 1s ease-in-out infinite;
+}
+#device.is-running .dot {
+  background: #37c26b;
+}
+#device.is-error .dot {
+  background: #e2483d;
+}
+@keyframes pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+/* ---- flash progress ---- */
+#progress {
+  position: fixed;
+  left: 50%;
+  bottom: 26px;
+  transform: translateX(-50%);
+  width: min(340px, 82vw);
+  z-index: 7;
+  background: rgba(20, 20, 20, 0.92);
+  border-radius: 12px;
+  padding: 12px 14px;
+  color: #eee;
+  font: 500 12px var(--font);
+}
+#progress .bar {
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.15);
+  overflow: hidden;
+  margin-bottom: 7px;
+}
+#progress .bar::after {
+  content: "";
+  display: block;
+  height: 100%;
+  width: var(--p, 0%);
+  background: var(--accent);
+  transition: width 0.2s ease;
+}
+
+/* ---- popovers ---- */
+#layer {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: none;
+}
+#layer.open {
+  display: block;
+}
+.popover {
+  position: absolute;
+  min-width: 168px;
+  max-width: 264px;
+  background: #fff;
+  border-radius: 14px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+  padding: 6px;
+  font: 500 13px var(--font);
+  color: #333;
+}
+.popover h4 {
+  margin: 6px 8px 2px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #999;
+}
+.popover button {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 8px;
+  border: none;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  padding: 8px 9px;
+  border-radius: 9px;
+  cursor: pointer;
+}
+.popover button:hover {
+  background: #f2f2f2;
+}
+.popover button[aria-checked="true"]::after {
+  content: "✓";
+  margin-left: auto;
+  color: var(--accent);
+}
+.popover .pins {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 4px;
+  padding: 4px 6px 6px;
+}
+.popover .pins button {
+  justify-content: center;
+  padding: 7px 0;
+  background: #f2f2f2;
+}
+.popover .pins button.sel {
+  background: var(--accent);
+  color: #fff;
+}
+.popover .sep {
+  height: 1px;
+  background: #eee;
+  margin: 5px 4px;
+}
+.popover .text-field {
+  padding: 3px 8px 6px;
+}
+.popover .text-field input {
+  width: 100%;
+  font: inherit;
+  padding: 7px 9px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  background: #fafafa;
+  color: #222;
+  outline: none;
+}
+.popover .text-field input:focus {
+  border-color: var(--accent);
+  background: #fff;
+}
+.popover .hint {
+  margin: 2px 9px 6px;
+  font-size: 11px;
+  font-weight: 400;
+  line-height: 1.35;
+  color: #999;
+}
+/* ---- toast ---- */
+#toast {
+  position: fixed;
+  left: 50%;
+  bottom: 26px;
+  transform: translateX(-50%);
+  z-index: 8;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: center;
+  pointer-events: none;
+}
+#toast div {
+  background: rgba(20, 20, 20, 0.92);
+  color: #f4f4f4;
+  font: 500 12.5px var(--font);
+  padding: 9px 14px;
+  border-radius: 999px;
+  max-width: 84vw;
+  text-align: center;
+}

@@ -1,0 +1,34 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0, viewport-fit=cover" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <link rel="icon" type="image/png" href="icon-512.png" />
+    <link rel="apple-touch-icon" href="icon-512.png" />
+    <meta name="manifest" content="manifest.json" />
+    <title>MicroPython Visual</title>
+    <link rel="stylesheet" type="text/css" href="app.css" />
+  </head>
+  <body>
+    <main id="canvas">
+      <div id="titlebox"><span id="title" contenteditable="true" spellcheck="false"></span></div>
+      <div id="blocks"></div>
+    </main>
+
+    <div id="tools">
+      <button id="add" title="New block (n)" aria-label="New block">+</button>
+      <button id="device" title="Connect to an ESP32" aria-label="Device">
+        <span class="dot"></span><span class="lbl">connect</span>
+      </button>
+    </div>
+
+    <div id="progress" hidden><div class="bar"></div><div class="msg"></div></div>
+    <div id="toast" aria-live="polite"></div>
+    <div id="layer"></div>
+
+    <script type="module" src="app.js"></script>
+  </body>
+</html>
