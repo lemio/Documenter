@@ -1,3 +1,6 @@
+<img width="1208" height="906" alt="Kapture 2026-08-27 at 16 14 37" src="https://github.com/user-attachments/assets/fa20ac94-a07c-4831-84a7-a749a8b34495" />
+
+
 # MicroPython Visual
 
 A freeform board of **value blocks**. Each block can be bound to a pin on an
